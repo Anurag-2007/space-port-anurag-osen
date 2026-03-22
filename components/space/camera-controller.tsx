@@ -142,17 +142,7 @@ export function CameraController({ selectedPlanet, launched }: CameraControllerP
 
   useFrame((state, delta) => {
     if (!launched) {
-      // Cinematic intro fly-in: start far out and zoom in
-      const introProgress = Math.min(state.clock.elapsedTime / 3, 1) // 3 seconds
-      const easeInOutCubic = introProgress < 0.5 
-        ? 4 * introProgress ** 3 
-        : 1 - Math.pow(-2 * introProgress + 2, 3) / 2
-      
-      // Start position: far back in deep space
-      const startPos = new THREE.Vector3(0, 120, 200)
-      const targetIntroPos = new THREE.Vector3(0, 40, 60)
-      
-      camera.position.lerpVectors(startPos, targetIntroPos, easeInOutCubic)
+      camera.position.set(0, 100, 150)
       camera.lookAt(0, 0, 0)
       return
     }

@@ -35,7 +35,6 @@ type SoundName =
   | "alarm"
   | "beep"
   | "deep-space"
-  | "deep-space-ambient"
   | "engine-rumble"
   | "scan"
   | "radio-static"
@@ -365,27 +364,6 @@ export function SoundProvider({ children }: { children: React.ReactNode }) {
           lfo.start(now)
           osc.stop(now + 4)
           lfo.stop(now + 4)
-          break
-        }
-        case "deep-space-ambient": {
-          // Immersive ambient drone for seamless entry
-          const osc = ctx.createOscillator()
-          osc.type = "sine"
-          osc.frequency.value = 50
-          const lfo = ctx.createOscillator()
-          lfo.type = "sine"
-          lfo.frequency.value = 0.15
-          const lfoGain = ctx.createGain()
-          lfoGain.gain.value = 8
-          lfo.connect(lfoGain)
-          lfoGain.connect(osc.frequency)
-          osc.connect(gain)
-          gain.gain.setValueAtTime(vol * 0.12, now)
-          gain.gain.exponentialRampToValueAtTime(0.001, now + 5)
-          osc.start(now)
-          lfo.start(now)
-          osc.stop(now + 5)
-          lfo.stop(now + 5)
           break
         }
         case "engine-rumble": {

@@ -5,23 +5,20 @@ import { StartScreen } from "@/components/space/start-screen"
 import { SpaceScene } from "@/components/space/space-scene"
 import { HudOverlay } from "@/components/space/hud-overlay"
 import { InfoPanel } from "@/components/space/info-panel"
-import { SearchPanel } from "@/components/space/search-panel"
-import { CTAButtons } from "@/components/space/cta-buttons"
 import { SoundProvider, useSounds } from "@/components/space/sound-engine"
 
 function SpacePortfolioInner() {
-  const [phase, setPhase] = useState<"intro" | "space">("intro")
+  const [phase, setPhase] = useState<"start" | "launching" | "space">("start")
   const [selectedPlanet, setSelectedPlanet] = useState<string | null>(null)
+  const [showStart, setShowStart] = useState(true)
   const sounds = useSounds()
   const hasInitSound = useRef(false)
-  const introComplete = useRef(false)
 
   // Easter egg states
   const [deepSpaceSignal, setDeepSpaceSignal] = useState(false)
   const [signalDismissed, setSignalDismissed] = useState(false)
   const [tripleClickMsg, setTripleClickMsg] = useState(false)
   const [idleMeteorMsg, setIdleMeteorMsg] = useState(false)
-  const [showInitOverlay, setShowInitOverlay] = useState(true)
   const lastInteraction = useRef(Date.now())
   const tripleClickCount = useRef(0)
   const tripleClickTimer = useRef<ReturnType<typeof setTimeout>>()
@@ -40,20 +37,6 @@ function SpacePortfolioInner() {
       window.removeEventListener("click", initOnInteraction)
       window.removeEventListener("keydown", initOnInteraction)
     }
-  }, [sounds])
-
-  // Seamless intro: auto-transition to space after 4 seconds with cinematic overlay
-  useEffect(() => {
-    if (introComplete.current) return
-    const timer = setTimeout(() => {
-      if (!introComplete.current) {
-        introComplete.current = true
-        setPhase("space")
-        sounds.play("deep-space-ambient")
-        setTimeout(() => setShowInitOverlay(false), 2000)
-      }
-    }, 4000)
-    return () => clearTimeout(timer)
   }, [sounds])
 
   // Deep space signal easter egg: after 70-120s of exploration
@@ -119,13 +102,12 @@ function SpacePortfolioInner() {
   }, [phase, idleMeteorMsg, sounds])
 
   const handleLaunch = useCallback(() => {
-    // Skip to space immediately - this is for manual override if needed
-    if (!introComplete.current) {
-      introComplete.current = true
+    setPhase("launching")
+    setTimeout(() => {
       setPhase("space")
-      setShowInitOverlay(false)
+      setShowStart(false)
       sounds.play("warp")
-    }
+    }, 2600)
   }, [sounds])
 
   const handleSelectPlanet = useCallback(
@@ -173,32 +155,6 @@ function SpacePortfolioInner() {
           planetId={selectedPlanet}
           onClose={() => setSelectedPlanet(null)}
         />
-      )}
-
-      {/* System Initializing Overlay - fades out after 4s */}
-      {showInitOverlay && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-background/95 backdrop-blur-sm pointer-events-auto animate-out fade-out duration-1000 fill-mode-forwards">
-          <div className="flex flex-col items-center gap-6">
-            <div className="font-mono text-sm md:text-base text-primary tracking-[0.2em] text-glow animate-pulse">
-              SYSTEM INITIALIZING...
-            </div>
-            <div className="flex gap-1">
-              {Array.from({ length: 12 }).map((_, i) => (
-                <div
-                  key={i}
-                  className="w-1 h-4 bg-primary/60 rounded-full"
-                  style={{
-                    animation: `pulse 1s ease-in-out infinite`,
-                    animationDelay: `${i * 50}ms`,
-                  }}
-                />
-              ))}
-            </div>
-            <p className="font-mono text-[10px] text-muted-foreground/60 tracking-widest uppercase mt-4">
-              Initializing deep space protocols...
-            </p>
-          </div>
-        </div>
       )}
 
       {/* Deep Space Signal Easter Egg */}
@@ -276,15 +232,8 @@ function SpacePortfolioInner() {
         </div>
       )}
 
-      {/* Start Screen - removed for seamless entry */}
-
-      {/* Search Panel */}
-      {phase === "space" && (
-        <SearchPanel selectedPlanet={selectedPlanet} onSelectPlanet={handleSelectPlanet} />
-      )}
-
-      {/* CTA Buttons (Resume, GitHub, Contact) */}
-      <CTAButtons visible={phase === "space"} />
+      {/* Start Screen */}
+      {showStart && <StartScreen onLaunch={handleLaunch} />}
     </main>
   )
 }

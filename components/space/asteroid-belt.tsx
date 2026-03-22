@@ -44,9 +44,6 @@ export function AsteroidBelt({ innerRadius = 48, outerRadius = 55, count = 300 }
       meshRef.current!.setMatrixAt(i, dummy.matrix)
     })
     meshRef.current.instanceMatrix.needsUpdate = true
-    
-    // Frustum culling for performance
-    meshRef.current.frustumCulled = true
   })
 
   return (
