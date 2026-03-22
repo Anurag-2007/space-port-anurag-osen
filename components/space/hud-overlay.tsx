@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from "react"
 import { PLANETS } from "./planet-data"
 import { useSounds } from "./sound-engine"
+import { DynamicTelemetry } from "./dynamic-telemetry"
 
 interface HudOverlayProps {
   visible: boolean
@@ -127,7 +128,12 @@ export function HudOverlay({ visible, selectedPlanet, onSelectPlanet }: HudOverl
       <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-3 md:px-6 py-2 md:py-3 pointer-events-auto">
         <div className="flex items-center gap-1.5 md:gap-3">
           <div className="glass-panel rounded px-2 md:px-3 py-1 md:py-1.5 flex items-center gap-1.5 md:gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
+            <span
+              className="w-2 h-2 rounded-full bg-accent animate-pulse"
+              style={{
+                animation: `pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite`,
+              }}
+            />
             <span className="font-mono text-[8px] md:text-[10px] text-foreground uppercase tracking-widest">
               ACTIVE
             </span>
@@ -317,6 +323,9 @@ export function HudOverlay({ visible, selectedPlanet, onSelectPlanet }: HudOverl
           </div>
         </div>
       </div>
+
+      {/* Dynamic telemetry panels */}
+      <DynamicTelemetry visible={showHud} />
 
       {/* Exploration progress */}
       <div className="absolute right-2 md:right-6 bottom-[7.5rem] md:bottom-[10rem] pointer-events-none">

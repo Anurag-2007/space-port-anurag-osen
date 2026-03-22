@@ -14,6 +14,7 @@ import { SpaceDust } from "./space-dust"
 import { CameraController } from "./camera-controller"
 import { PLANETS } from "./planet-data"
 import * as THREE from "three"
+import { useEffect } from "react"
 
 interface SpaceSceneProps {
   launched: boolean
@@ -293,14 +294,26 @@ function SceneContent({ launched, selectedPlanet, onSelectPlanet, idleMeteorShow
 }
 
 export function SpaceScene({ launched, selectedPlanet, onSelectPlanet, idleMeteorShower }: SpaceSceneProps) {
+  const [pixelRatio, setPixelRatio] = useState(1)
+
+  useEffect(() => {
+    // Adaptive pixel ratio based on device performance
+    const dpr = Math.min(window.devicePixelRatio, 2)
+    setPixelRatio(dpr)
+  }, [])
+
   return (
     <div className="fixed inset-0 w-full h-screen">
       <Canvas
+        dpr={pixelRatio}
         camera={{ position: [0, 40, 60], fov: 60, near: 0.1, far: 3000 }}
         gl={{
-          antialias: true,
-          toneMapping: 3,
-          toneMappingExposure: 1.4,
+          antialias: pixelRatio < 2,
+          toneMapping: THREE.ACESFilmicToneMapping,
+          toneMappingExposure: 1.6,
+          alpha: false,
+          preserveDrawingBuffer: false,
+          powerPreference: "high-performance",
         }}
         onPointerMissed={() => onSelectPlanet(null)}
       >
