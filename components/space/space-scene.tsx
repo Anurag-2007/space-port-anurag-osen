@@ -2,7 +2,7 @@
 
 import { useRef, useState, useMemo, useCallback } from "react"
 import { Canvas, useFrame } from "@react-three/fiber"
-import { Html, Bloom, EffectComposer } from "@react-three/drei"
+import { Html } from "@react-three/drei"
 import { Starfield } from "./starfield"
 import { Sun } from "./sun"
 import { Planet } from "./planet"
@@ -307,16 +307,6 @@ export function SpaceScene({ launched, selectedPlanet, onSelectPlanet, idleMeteo
       >
         <color attach="background" args={["#020610"]} />
         <fog attach="fog" args={["#020610", 200, 1200]} />
-        
-        {/* Post-processing effects for cinematic quality */}
-        <EffectComposer>
-          <Bloom
-            luminanceThreshold={0.3}
-            luminanceSmoothing={0.9}
-            intensity={1.2}
-            kernelSize={3}
-          />
-        </EffectComposer>
 
         <SceneContent
           launched={launched}

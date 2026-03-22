@@ -76,15 +76,6 @@ export function Starfield({ count = 5000 }) {
 
     return [pos, s, col, base]
   }, [count])
-        // White
-        col[i * 3] = 0.9 + Math.random() * 0.1
-        col[i * 3 + 1] = 0.9 + Math.random() * 0.1
-        col[i * 3 + 2] = 0.9 + Math.random() * 0.1
-      }
-    }
-
-    return [pos, s, col, base]
-  }, [count])
 
   // Store twinkle phases
   const twinklePhases = useMemo(() => {
