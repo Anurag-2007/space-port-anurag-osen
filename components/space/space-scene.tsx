@@ -299,15 +299,13 @@ export function SpaceScene({ launched, selectedPlanet, onSelectPlanet, idleMeteo
         camera={{ position: [0, 40, 60], fov: 60, near: 0.1, far: 3000 }}
         gl={{
           antialias: true,
-          toneMapping: THREE.ACESFilmicToneMapping,
-          toneMappingExposure: 1.5,
-          powerPreference: "high-performance",
+          toneMapping: 3,
+          toneMappingExposure: 1.4,
         }}
         onPointerMissed={() => onSelectPlanet(null)}
       >
         <color attach="background" args={["#020610"]} />
         <fog attach="fog" args={["#020610", 200, 1200]} />
-
         <SceneContent
           launched={launched}
           selectedPlanet={selectedPlanet}
