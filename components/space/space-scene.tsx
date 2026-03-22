@@ -2,7 +2,7 @@
 
 import { useRef, useState, useMemo, useCallback } from "react"
 import { Canvas, useFrame } from "@react-three/fiber"
-import { Html } from "@react-three/drei"
+import { Html, Bloom, EffectComposer } from "@react-three/drei"
 import { Starfield } from "./starfield"
 import { Sun } from "./sun"
 import { Planet } from "./planet"
@@ -299,13 +299,25 @@ export function SpaceScene({ launched, selectedPlanet, onSelectPlanet, idleMeteo
         camera={{ position: [0, 40, 60], fov: 60, near: 0.1, far: 3000 }}
         gl={{
           antialias: true,
-          toneMapping: 3,
-          toneMappingExposure: 1.4,
+          toneMapping: THREE.ACESFilmicToneMapping,
+          toneMappingExposure: 1.5,
+          powerPreference: "high-performance",
         }}
         onPointerMissed={() => onSelectPlanet(null)}
       >
         <color attach="background" args={["#020610"]} />
         <fog attach="fog" args={["#020610", 200, 1200]} />
+        
+        {/* Post-processing effects for cinematic quality */}
+        <EffectComposer>
+          <Bloom
+            luminanceThreshold={0.3}
+            luminanceSmoothing={0.9}
+            intensity={1.2}
+            kernelSize={3}
+          />
+        </EffectComposer>
+
         <SceneContent
           launched={launched}
           selectedPlanet={selectedPlanet}

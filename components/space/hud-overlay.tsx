@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback, useRef } from "react"
+import { useState, useEffect, useRef } from "react"
 import { PLANETS } from "./planet-data"
 import { useSounds } from "./sound-engine"
 
@@ -11,415 +11,373 @@ interface HudOverlayProps {
 }
 
 export function HudOverlay({ visible, selectedPlanet, onSelectPlanet }: HudOverlayProps) {
-  const [showHud, setShowHud] = useState(false)
   const [missionTime, setMissionTime] = useState(0)
-  const [velocity, setVelocity] = useState(7.66)
-  const [altitude, setAltitude] = useState(400.2)
-  const [signalStrength, setSignalStrength] = useState(98.2)
-  const [showHelp, setShowHelp] = useState(false)
-  const [helpLineIndex, setHelpLineIndex] = useState(0)
+  const [coordinates, setCoordinates] = useState({ x: 0.0, y: 0.0, z: 0.0 })
+  const [velocity, setVelocity] = useState(0)
+  const [altitude, setAltitude] = useState(0)
+  const [signalStrength, setSignalStrength] = useState(85)
+  const [fps, setFps] = useState(60)
+  const [exploredCount, setExploredCount] = useState(0)
+  const [systemLogs, setSystemLogs] = useState<string[]>([
+    "[13:18:29.223] SYS.CORE > Initializing quantum nav matrix...",
+    "[13:18:30.028] NAV.GPS > Calculating orbital trajectory...",
+    "[13:18:30.819] COM.LINK > Establishing deep-space relay...",
+    "[13:18:31.624] PWR.MAIN > Fusion reactor output: 98.7%",
+  ])
+
   const sounds = useSounds()
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const fpsRef = useRef(0)
+  const lastFpsTime = useRef(Date.now())
+  const exploredRef = useRef(new Set<string>())
 
-  // Smart awareness state
-  const [awareness, setAwareness] = useState<string | null>(null)
-  const awarenessTimeout = useRef<ReturnType<typeof setTimeout>>()
-  const visitedPlanets = useRef<Set<string>>(new Set())
-  const visitCounts = useRef<Record<string, number>>({})
-  const lastScroll = useRef(Date.now())
-  const scrollDelta = useRef(0)
-
+  // Update telemetry
   useEffect(() => {
     if (!visible) return
-    setTimeout(() => {
-      setShowHud(true)
-      sounds.play("deep-space")
-    }, 1000)
-  }, [visible, sounds])
+    const timer = setInterval(() => {
+      setMissionTime((t) => t + 1)
+      const t = Date.now() / 1000
+      setCoordinates({
+        x: Math.sin(t * 0.5) * 50,
+        y: Math.cos(t * 0.3) * 40,
+        z: Math.sin(t * 0.7) * 60,
+      })
+      setVelocity(15 + Math.sin(t) * 8)
+      setAltitude(120 + Math.cos(t * 0.5) * 30)
+      setSignalStrength(75 + Math.random() * 25)
+    }, 500)
+    return () => clearInterval(timer)
+  }, [visible])
 
+  // FPS counter
   useEffect(() => {
-    if (!showHud) return
-    const interval = setInterval(() => {
-      setMissionTime((prev) => prev + 1)
-      setVelocity(7.5 + Math.random() * 0.5)
-      setAltitude(398 + Math.random() * 5)
-      setSignalStrength(95 + Math.random() * 5)
-    }, 1000)
-    return () => clearInterval(interval)
-  }, [showHud])
-
-  // Track scroll speed for "high velocity" awareness
-  useEffect(() => {
-    if (!showHud) return
-    const handleScroll = () => {
+    const countFrame = () => {
+      fpsRef.current++
       const now = Date.now()
-      const dt = now - lastScroll.current
-      if (dt < 200) {
-        scrollDelta.current++
-        if (scrollDelta.current > 8) {
-          showAwareness("HIGH VELOCITY NAVIGATION DETECTED")
-          scrollDelta.current = 0
-        }
-      } else {
-        scrollDelta.current = 0
+      if (now - lastFpsTime.current >= 1000) {
+        setFps(fpsRef.current)
+        fpsRef.current = 0
+        lastFpsTime.current = now
       }
-      lastScroll.current = now
+      requestAnimationFrame(countFrame)
     }
-    window.addEventListener("wheel", handleScroll, { passive: true })
-    return () => window.removeEventListener("wheel", handleScroll)
-  }, [showHud])
-
-  // Track planet visits for smart awareness
-  useEffect(() => {
-    if (!selectedPlanet || !showHud) return
-    visitedPlanets.current.add(selectedPlanet)
-    visitCounts.current[selectedPlanet] = (visitCounts.current[selectedPlanet] || 0) + 1
-
-    // Check for repeated visits
-    if (visitCounts.current[selectedPlanet] >= 3) {
-      const planet = PLANETS.find((p) => p.id === selectedPlanet)
-      showAwareness(`${planet?.name?.toUpperCase() || "SECTOR"} appears to be of primary interest`)
-    }
-
-    // Check for full exploration
-    if (visitedPlanets.current.size === PLANETS.length) {
-      setTimeout(() => showAwareness("SYSTEM EXPLORATION COMPLETE"), 2000)
-    }
-  }, [selectedPlanet, showHud])
-
-  const showAwareness = useCallback((msg: string) => {
-    setAwareness(msg)
-    if (awarenessTimeout.current) clearTimeout(awarenessTimeout.current)
-    awarenessTimeout.current = setTimeout(() => setAwareness(null), 4000)
+    const id = requestAnimationFrame(countFrame)
+    return () => cancelAnimationFrame(id)
   }, [])
 
-  // Help guide typewriter
+  // Auto-scroll logs
   useEffect(() => {
-    if (!showHelp) {
-      setHelpLineIndex(0)
-      return
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight
     }
-    if (helpLineIndex >= HELP_LINES.length) return
-    const timer = setTimeout(() => setHelpLineIndex((i) => i + 1), 120)
-    return () => clearTimeout(timer)
-  }, [showHelp, helpLineIndex])
+  }, [systemLogs])
 
-  const toggleHelp = useCallback(() => {
-    sounds.play("scan")
-    setShowHelp((h) => !h)
-  }, [sounds])
+  // Handle planet selection
+  const handleSelectPlanet = (id: string) => {
+    if (!exploredRef.current.has(id)) {
+      exploredRef.current.add(id)
+      setExploredCount(exploredRef.current.size)
+      setSystemLogs((prev) => [
+        ...prev.slice(-3),
+        `[${new Date().toLocaleTimeString()}] NAV.TARGET > Lock acquired on ${id.toUpperCase()}`,
+      ])
+    }
+    onSelectPlanet(id === selectedPlanet ? null : id)
+    sounds.play("click")
+  }
 
   if (!visible) return null
 
-  const formatTime = (seconds: number) => {
-    const h = String(Math.floor(seconds / 3600)).padStart(2, "0")
-    const m = String(Math.floor((seconds % 3600) / 60)).padStart(2, "0")
-    const s = String(seconds % 60).padStart(2, "0")
-    return `${h}:${m}:${s}`
-  }
+  const formatTime = (seconds: number) =>
+    `${String(Math.floor(seconds / 3600)).padStart(2, "0")}:${String(
+      Math.floor((seconds % 3600) / 60)
+    ).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`
 
   return (
-    <div
-      className={`fixed inset-0 z-30 pointer-events-none transition-opacity duration-1000 ${
-        showHud ? "opacity-100" : "opacity-0"
-      }`}
-    >
-      {/* Top HUD bar */}
-      <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-3 md:px-6 py-2 md:py-3 pointer-events-auto">
-        <div className="flex items-center gap-1.5 md:gap-3">
-          <div className="glass-panel rounded px-2 md:px-3 py-1 md:py-1.5 flex items-center gap-1.5 md:gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
-            <span className="font-mono text-[8px] md:text-[10px] text-foreground uppercase tracking-widest">
-              ACTIVE
-            </span>
+    <div className="fixed inset-0 z-30 pointer-events-none font-mono">
+      {/* TOP STATUS BAR */}
+      <div className="absolute top-0 left-0 right-0 h-12 border-b border-cyan-500/30 bg-gradient-to-b from-background/70 to-transparent backdrop-blur-sm flex items-center justify-between px-6 pointer-events-auto text-xs text-cyan-400">
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-2">
+            <span className="inline-block w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+            <span className="uppercase tracking-widest">SYS.ONLINE</span>
           </div>
-          <div className="hidden sm:block glass-panel rounded px-2 md:px-3 py-1 md:py-1.5">
-            <span className="font-mono text-[8px] md:text-[10px] text-muted-foreground tracking-wider">
-              {"MET: "}{formatTime(missionTime)}
-            </span>
-          </div>
-          <div className="hidden md:block glass-panel rounded px-3 py-1.5">
-            <span className="font-mono text-[10px] text-muted-foreground tracking-wider">
-              {"SIG: "}{signalStrength.toFixed(1)}{"dB"}
-            </span>
-          </div>
+          <div>CORE TEMP: 36.4C</div>
+          <div>SIGNAL: {signalStrength.toFixed(1)}%</div>
         </div>
-
-        <div className="flex items-center gap-1.5 md:gap-3">
-          <div className="hidden sm:block glass-panel rounded px-2 md:px-3 py-1 md:py-1.5">
-            <span className="font-mono text-[8px] md:text-[10px] text-muted-foreground tracking-wider">
-              {"VEL: "}{velocity.toFixed(2)}
-            </span>
+        <div className="text-center text-cyan-400/60">
+          {new Date().toLocaleTimeString("en-GB")}
+        </div>
+        <div className="flex items-center gap-6 text-cyan-400/60">
+          <div>MEM: 2.4TB/4TB</div>
+          <div className="flex items-center gap-2">
+            <span>SEC.LVL:</span>
+            <span className="text-green-500">ALPHA_</span>
           </div>
-          <div className="hidden md:block glass-panel rounded px-3 py-1.5">
-            <span className="font-mono text-[10px] text-muted-foreground tracking-wider">
-              {"ALT: "}{altitude.toFixed(1)}{"km"}
-            </span>
-          </div>
-          <button
-            onClick={toggleHelp}
-            className={`glass-panel rounded px-2 md:px-3 py-1 md:py-1.5 cursor-pointer transition-all duration-300 ${
-              showHelp ? "box-glow border-primary/50" : "hover:border-primary/40"
-            }`}
-            aria-label="Toggle help guide"
-          >
-            <span className="font-mono text-[8px] md:text-[10px] text-primary tracking-wider font-bold">
-              {"[?] HELP"}
-            </span>
-          </button>
-          <button
-            onClick={() => {
-              sounds.toggleMute()
-              sounds.play("click")
-            }}
-            className="glass-panel rounded px-2 md:px-3 py-1 md:py-1.5 cursor-pointer hover:border-primary/40 transition-colors"
-            aria-label={sounds.isMuted ? "Unmute sounds" : "Mute sounds"}
-          >
-            <span className="font-mono text-[8px] md:text-[10px] text-muted-foreground tracking-wider">
-              {"SFX: "}{sounds.isMuted ? "OFF" : "ON"}
-            </span>
-          </button>
         </div>
       </div>
 
-      {/* Smart System Awareness Toast */}
-      {awareness && (
-        <div className="absolute top-14 md:top-16 left-1/2 -translate-x-1/2 pointer-events-none animate-in fade-in slide-in-from-top-2 duration-500">
-          <div className="glass-panel-bright rounded-lg px-4 py-2 flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-chart-4 animate-pulse" />
-            <span className="font-mono text-[9px] md:text-[10px] text-chart-4 uppercase tracking-[0.15em]">
-              {awareness}
-            </span>
+      {/* MAIN CONTENT AREA */}
+      <div className="absolute top-12 bottom-12 inset-x-0 flex">
+        {/* LEFT PANEL - NAVIGATION */}
+        <div className="w-96 border-r border-cyan-500/20 bg-background/30 backdrop-blur p-6 overflow-y-auto pointer-events-auto">
+          <div className="text-xs text-cyan-400/60 uppercase tracking-widest mb-4 font-bold">
+            ● SYSTEM CONFIG
           </div>
-        </div>
-      )}
-
-      {/* Help Guide Terminal Overlay */}
-      {showHelp && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center pointer-events-auto">
-          <div
-            className="absolute inset-0 bg-background/60 backdrop-blur-sm"
-            onClick={toggleHelp}
-          />
-          <div className="relative glass-panel-bright rounded-lg w-[calc(100vw-32px)] max-w-lg max-h-[80vh] overflow-y-auto p-4 md:p-6">
-            <div className="flex items-center justify-between mb-3 md:mb-4 pb-2 border-b border-border/50">
-              <div className="flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
-                <span className="font-mono text-xs md:text-sm text-primary uppercase tracking-[0.2em] font-bold text-glow">
-                  ASTRONAUT GUIDE
-                </span>
-              </div>
-              <button
-                onClick={toggleHelp}
-                className="font-mono text-xs text-muted-foreground hover:text-primary cursor-pointer"
-                aria-label="Close help"
-              >
-                {"[X]"}
-              </button>
+          <div className="space-y-2 mb-6 text-xs text-cyan-400/70">
+            <div className="flex justify-between">
+              <span>● NAVIGATION</span>
+              <span className="text-cyan-400">ONLINE_</span>
             </div>
-            <div className="space-y-1 font-mono text-[10px] md:text-xs leading-relaxed">
-              {HELP_LINES.map((line, i) => (
-                <div
-                  key={i}
-                  className={`transition-all duration-200 ${
-                    i <= helpLineIndex ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-2"
-                  } ${line.type === "header" ? "text-primary font-bold mt-3 text-glow" : ""} ${
-                    line.type === "hint" ? "text-chart-4" : ""
-                  } ${line.type === "normal" ? "text-foreground/70" : ""} ${
-                    line.type === "separator" ? "text-border/40" : ""
+            <div className="flex justify-between">
+              <span>● LIFE SUPPORT</span>
+              <span className="text-cyan-400">NOMINAL_</span>
+            </div>
+            <div className="flex justify-between">
+              <span>● COMM ARRAY</span>
+              <span className="text-cyan-400">LINK EST._</span>
+            </div>
+            <div className="flex justify-between">
+              <span>● PROPULSION</span>
+              <span className="text-cyan-400">READY_</span>
+            </div>
+            <div className="flex justify-between">
+              <span>● MISSION</span>
+              <span className="text-orange-400">PORTFOLIO_</span>
+            </div>
+            <div className="flex justify-between">
+              <span>● SHIELD GEN</span>
+              <span className="text-cyan-400">ACTIVE_</span>
+            </div>
+            <div className="flex justify-between">
+              <span>● WEAPONS</span>
+              <span className="text-orange-400">STANDBY_</span>
+            </div>
+          </div>
+
+          {/* Navigation Links */}
+          <div className="border-t border-cyan-500/20 pt-4">
+            <div className="text-xs text-cyan-400/60 uppercase tracking-widest mb-3 font-bold">
+              ● PRIMARY NAVIGATION
+            </div>
+            <div className="space-y-2">
+              {PLANETS.map((planet) => (
+                <button
+                  key={planet.id}
+                  onClick={() => handleSelectPlanet(planet.id)}
+                  className={`w-full text-left px-3 py-2 rounded text-xs uppercase tracking-wider transition-all ${
+                    selectedPlanet === planet.id
+                      ? "bg-cyan-500/20 border border-cyan-400 text-cyan-300"
+                      : "border border-cyan-500/30 text-cyan-400/70 hover:border-cyan-400 hover:text-cyan-400"
                   }`}
                 >
-                  {line.text}
+                  ● {planet.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* CENTER CONTENT */}
+        <div className="flex-1 flex flex-col items-center justify-center px-8">
+          <div className="text-center space-y-4 mb-12">
+            <div className="text-xs text-cyan-400/50 uppercase tracking-[0.3em]">
+              ◆ PORTFOLIO DIVISION ◆
+            </div>
+            <h1
+              className="text-6xl font-bold tracking-wider text-cyan-300"
+              style={{
+                textShadow: "0 0 30px rgba(0, 200, 220, 0.6), 0 0 60px rgba(0, 200, 220, 0.3)",
+              }}
+            >
+              ANURAG'S SPACEPORT
+            </h1>
+            <div className="text-xs text-cyan-400/40 uppercase tracking-[0.2em]">
+              Deep Space Portfolio Navigation System v2.4.1
+            </div>
+
+            {/* Animated Waveform */}
+            <div className="flex items-center justify-center gap-0.5 mt-8">
+              {Array.from({ length: 20 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="bg-gradient-to-t from-cyan-400 to-cyan-300 rounded-sm"
+                  style={{
+                    width: "3px",
+                    height: `${10 + Math.sin(Date.now() / 100 + i * 0.3) * 10}px`,
+                    transition: "height 50ms ease-out",
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Panel Grid */}
+          <div className="grid grid-cols-3 gap-4 w-full max-w-4xl">
+            {/* Panel 1: Proximity Radar */}
+            <div className="border border-cyan-500/30 bg-cyan-500/5 rounded p-4">
+              <div className="text-xs text-cyan-400 uppercase tracking-widest mb-3 font-bold">
+                ● PROXIMITY RADAR
+              </div>
+              <svg viewBox="0 0 100 100" className="w-full h-32 mb-2">
+                <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(0,200,220,0.1)" strokeWidth="0.5" />
+                <circle cx="50" cy="50" r="20" fill="none" stroke="rgba(0,200,220,0.15)" strokeWidth="0.5" />
+                <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(0,200,220,0.2)" strokeWidth="1" />
+                <circle cx="50" cy="50" r="2" fill="#00c8dc" />
+                {PLANETS.slice(0, 5).map((p, i) => {
+                  const angle = (i / 5) * Math.PI * 2
+                  const x = 50 + Math.cos(angle - Math.PI / 2) * 30
+                  const y = 50 + Math.sin(angle - Math.PI / 2) * 30
+                  return (
+                    <circle
+                      key={p.id}
+                      cx={x}
+                      cy={y}
+                      r="2"
+                      fill={selectedPlanet === p.id ? p.color : "rgba(0,200,220,0.4)"}
+                    />
+                  )
+                })}
+              </svg>
+              <div className="text-[10px] text-cyan-400/60 text-center">ORBIT STATUS</div>
+            </div>
+
+            {/* Panel 2: System Diagnostics */}
+            <div className="border border-cyan-500/30 bg-cyan-500/5 rounded p-4">
+              <div className="text-xs text-cyan-400 uppercase tracking-widest mb-3 font-bold">
+                ● SYSTEM DIAGNOSTICS
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs text-cyan-400/70">
+                <div className="flex flex-col items-center p-2 border border-cyan-500/20 rounded">
+                  <div className="text-cyan-400/50 mb-1">POWER</div>
+                  <div className="text-lg text-cyan-400">98%</div>
+                </div>
+                <div className="flex flex-col items-center p-2 border border-cyan-500/20 rounded">
+                  <div className="text-cyan-400/50 mb-1">FUEL</div>
+                  <div className="text-lg text-cyan-400">87%</div>
+                </div>
+                <div className="flex flex-col items-center p-2 border border-cyan-500/20 rounded">
+                  <div className="text-cyan-400/50 mb-1">O2</div>
+                  <div className="text-lg text-cyan-400">100%</div>
+                </div>
+                <div className="flex flex-col items-center p-2 border border-cyan-500/20 rounded">
+                  <div className="text-cyan-400/50 mb-1">CPU</div>
+                  <div className="text-lg text-cyan-400">42%</div>
+                </div>
+                <div className="flex flex-col items-center p-2 border border-cyan-500/20 rounded">
+                  <div className="text-cyan-400/50 mb-1">HULL</div>
+                  <div className="text-lg text-cyan-400">100%</div>
+                </div>
+                <div className="flex flex-col items-center p-2 border border-cyan-500/20 rounded">
+                  <div className="text-cyan-400/50 mb-1">TEMP</div>
+                  <div className="text-lg text-cyan-400">36C</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Panel 3: Orbit Status & Launch */}
+            <div className="border border-cyan-500/30 bg-cyan-500/5 rounded p-4 flex flex-col">
+              <div className="text-xs text-cyan-400 uppercase tracking-widest mb-3 font-bold">
+                ● ORBIT STATUS
+              </div>
+              <div className="text-xs text-cyan-400/70 space-y-1 mb-4 flex-1">
+                <div className="flex justify-between">
+                  <span>Apoapsis</span>
+                  <span>420.3 km</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Periapsis</span>
+                  <span>360.1 km</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Inclination</span>
+                  <span>51.6 deg</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Period</span>
+                  <span>92.4 min</span>
+                </div>
+              </div>
+              <div className="border-t border-cyan-500/20 pt-2">
+                <div className="text-[10px] text-cyan-400/60">ALL SYSTEMS NOMINAL</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* RIGHT PANEL - TELEMETRY */}
+        <div className="w-96 border-l border-cyan-500/20 bg-background/30 backdrop-blur p-6 flex flex-col pointer-events-auto">
+          <div className="text-xs text-cyan-400/60 uppercase tracking-widest mb-4 font-bold">
+            ● TELEMETRY FEED
+          </div>
+
+          <div
+            ref={scrollRef}
+            className="flex-1 border border-cyan-500/20 rounded bg-cyan-500/5 p-3 text-[9px] text-orange-400/60 overflow-y-auto mb-4 font-mono"
+          >
+            <div className="space-y-1">
+              {systemLogs.map((log, i) => (
+                <div key={i} className="hover:text-orange-400/100 transition-colors">
+                  {log}
                 </div>
               ))}
-              {helpLineIndex < HELP_LINES.length && (
-                <span className="inline-block w-2 h-3 bg-primary animate-pulse ml-1" />
+              {systemLogs.length < 5 && (
+                <div className="text-cyan-400/40 animate-pulse">{">"}</div>
               )}
             </div>
-            <div className="mt-4 pt-2 border-t border-border/30 flex items-center justify-between">
-              <span className="font-mono text-[8px] text-muted-foreground/40 uppercase tracking-widest">
-                MISSION CONTROL MANUAL v3.0
-              </span>
-              <span className="font-mono text-[8px] text-muted-foreground/40">
-                {"ESC or [X] to close"}
-              </span>
+          </div>
+
+          <div className="text-xs text-cyan-400/60 uppercase tracking-widest mb-2 font-bold">
+            ● MISSION BRIEF
+          </div>
+          <div className="border border-cyan-500/20 rounded bg-cyan-500/5 p-3 text-xs text-cyan-400/70 mb-4">
+            <p className="mb-2">OBJECTIVE: Navigate the stellar portfolio</p>
+            <p className="mb-2">SECTORS: Skills / Projects / Experience</p>
+            <p>THREAT LEVEL: Minimal</p>
+          </div>
+
+          <div className="text-xs text-cyan-400/60 uppercase tracking-widest mb-2 font-bold">
+            ● EXPLORATION
+          </div>
+          <div className="border border-cyan-500/20 rounded bg-cyan-500/5 p-2 mb-4">
+            <div className="flex justify-between items-center text-xs text-cyan-400/70 mb-2">
+              <span>{exploredCount}/8 Sectors</span>
+              <span>{Math.round((exploredCount / 8) * 100)}%</span>
+            </div>
+            <div className="w-full h-2 bg-cyan-500/10 rounded overflow-hidden">
+              <div
+                className="h-full bg-cyan-400 transition-all duration-300"
+                style={{ width: `${(exploredCount / 8) * 100}%` }}
+              />
             </div>
           </div>
-        </div>
-      )}
 
-      {/* Left nav - planet selector */}
-      <nav
-        className="absolute left-2 md:left-6 top-1/2 -translate-y-1/2 flex flex-col gap-1 md:gap-2 pointer-events-auto max-h-[60vh] overflow-y-auto"
-        aria-label="Planet navigation"
-      >
-        {PLANETS.map((planet) => (
-          <button
-            key={planet.id}
-            onClick={() => {
-              sounds.play("click")
-              onSelectPlanet(selectedPlanet === planet.id ? null : planet.id)
-            }}
-            onMouseEnter={() => sounds.play("hover")}
-            className={`
-              glass-panel rounded px-2 md:px-3 py-1 md:py-2 flex items-center gap-1.5 md:gap-2 transition-all duration-300 cursor-pointer
-              hover:border-primary/40
-              ${selectedPlanet === planet.id ? "box-glow border-primary/50" : ""}
-            `}
-            aria-label={`Navigate to ${planet.name}`}
-          >
-            <span
-              className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full shrink-0"
-              style={{ backgroundColor: planet.color }}
-            />
-            <span
-              className={`font-mono text-[8px] md:text-[10px] uppercase tracking-widest ${
-                selectedPlanet === planet.id ? "text-primary" : "text-muted-foreground"
-              }`}
-            >
-              {planet.name}
-            </span>
-            {selectedPlanet === planet.id && (
-              <span className="w-1 h-1 rounded-full bg-primary animate-pulse ml-auto" />
-            )}
-            {/* Visit indicator */}
-            {visitedPlanets.current.has(planet.id) && selectedPlanet !== planet.id && (
-              <span className="w-1 h-1 rounded-full bg-accent/50 ml-auto" />
-            )}
-          </button>
-        ))}
-      </nav>
-
-      {/* Right mini-map */}
-      <div className="absolute right-2 md:right-6 bottom-12 md:bottom-16 pointer-events-none">
-        <div className="glass-panel rounded-lg p-2 md:p-3 w-16 h-16 md:w-24 md:h-24">
-          <svg viewBox="0 0 100 100" className="w-full h-full">
-            <circle cx="50" cy="50" r="2" fill="rgba(0,200,220,0.8)" />
-            {PLANETS.map((p) => {
-              const r = (p.orbitRadius / 65) * 45
-              return (
-                <circle
-                  key={p.id}
-                  cx={50}
-                  cy={50}
-                  r={r}
-                  fill="none"
-                  stroke={selectedPlanet === p.id ? p.color : "rgba(0,200,220,0.1)"}
-                  strokeWidth={selectedPlanet === p.id ? 1 : 0.3}
-                />
-              )
-            })}
-            <circle cx="85" cy="20" r="2" fill="rgba(255,68,0,0.5)" />
-          </svg>
-          <div className="text-center mt-0.5 md:mt-1">
-            <span className="font-mono text-[6px] md:text-[7px] text-muted-foreground/40 uppercase tracking-wider">
-              System Map
-            </span>
+          <div className="text-xs text-cyan-400/50 text-center">
+            {formatTime(missionTime)}
           </div>
         </div>
       </div>
 
-      {/* Exploration progress */}
-      <div className="absolute right-2 md:right-6 bottom-[7.5rem] md:bottom-[10rem] pointer-events-none">
-        <div className="glass-panel rounded px-2 py-1.5">
-          <div className="font-mono text-[7px] md:text-[8px] text-muted-foreground/40 uppercase tracking-widest mb-1">
-            Explored
-          </div>
-          <div className="flex items-center gap-0.5">
-            {PLANETS.map((p) => (
-              <div
-                key={p.id}
-                className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full transition-all duration-500"
-                style={{
-                  backgroundColor: visitedPlanets.current.has(p.id) ? p.color : "rgba(255,255,255,0.08)",
-                }}
-                title={p.name}
-              />
-            ))}
-          </div>
+      {/* BOTTOM CONTROL BAR */}
+      <div className="absolute bottom-0 left-0 right-0 h-12 border-t border-cyan-500/30 bg-gradient-to-t from-background/70 to-transparent backdrop-blur-sm flex items-center justify-between px-6 pointer-events-auto text-xs text-cyan-400/60">
+        <div className="flex items-center gap-4">
+          <span className="text-cyan-400">ALL SYSTEMS NOMINAL</span>
         </div>
-      </div>
-
-      {/* Bottom bar */}
-      <div className="absolute bottom-0 left-0 right-0 flex items-center justify-center gap-2 md:gap-6 px-3 md:px-6 py-2 md:py-3 flex-wrap">
-        <span className="font-mono text-[7px] md:text-[9px] text-muted-foreground/30 tracking-widest uppercase">
-          Drag to orbit
-        </span>
-        <span className="font-mono text-[7px] md:text-[9px] text-muted-foreground/30">|</span>
-        <span className="font-mono text-[7px] md:text-[9px] text-muted-foreground/30 tracking-widest uppercase">
-          Scroll to zoom
-        </span>
-        <span className="hidden sm:inline font-mono text-[9px] text-muted-foreground/30">|</span>
-        <span className="hidden sm:inline font-mono text-[9px] text-muted-foreground/30 tracking-widest uppercase">
-          WASD / QE to navigate
-        </span>
-        <span className="hidden md:inline font-mono text-[9px] text-muted-foreground/30">|</span>
-        <span className="hidden md:inline font-mono text-[9px] text-muted-foreground/30 tracking-widest uppercase">
-          Click planet to inspect
-        </span>
-      </div>
-
-      {/* Corner brackets */}
-      <div className="absolute top-3 left-3 md:top-4 md:left-4 w-4 h-4 md:w-6 md:h-6 border-l border-t border-primary/20" />
-      <div className="absolute top-3 right-3 md:top-4 md:right-4 w-4 h-4 md:w-6 md:h-6 border-r border-t border-primary/20" />
-      <div className="absolute bottom-3 left-3 md:bottom-4 md:left-4 w-4 h-4 md:w-6 md:h-6 border-l border-b border-primary/20" />
-      <div className="absolute bottom-3 right-3 md:bottom-4 md:right-4 w-4 h-4 md:w-6 md:h-6 border-r border-b border-primary/20" />
-
-      {/* Crosshair center */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
-        <div className="w-6 h-6 md:w-8 md:h-8 relative">
-          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-px h-1.5 md:h-2 bg-primary/15" />
-          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-px h-1.5 md:h-2 bg-primary/15" />
-          <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1.5 md:w-2 h-px bg-primary/15" />
-          <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1.5 md:w-2 h-px bg-primary/15" />
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-1 h-1 rounded-full bg-primary/20" />
+        <div className="flex items-center gap-4">
+          <span>DRAG: Orbit | SCROLL: Zoom | 1-7: Jump</span>
         </div>
-      </div>
-
-      {/* Scan line */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-30">
-        <div className="absolute left-0 w-full h-px bg-primary/5 animate-scan-line" style={{ animationDuration: "8s" }} />
+        <div className="flex items-center gap-2">
+          <span>
+            LAT: {coordinates.x.toFixed(2)} LON: {coordinates.y.toFixed(2)} ALT:{" "}
+            {altitude.toFixed(1)}km
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span>VEL: {velocity.toFixed(2)}</span>
+          <span>ORBIT: LEO</span>
+          <span>SIGNAL: {signalStrength.toFixed(1)}</span>
+        </div>
       </div>
     </div>
   )
 }
-
-const HELP_LINES: Array<{ text: string; type: "header" | "normal" | "hint" | "separator" }> = [
-  { text: "> INITIALIZING ASTRONAUT TERMINAL v3.0...", type: "header" },
-  { text: "========================================", type: "separator" },
-  { text: "", type: "normal" },
-  { text: "> NAVIGATION CONTROLS", type: "header" },
-  { text: "  Mouse Drag / Touch    - Orbit camera", type: "normal" },
-  { text: "  Scroll / Pinch        - Zoom in/out", type: "normal" },
-  { text: "  W/A/S/D or Arrows     - Rotate view", type: "normal" },
-  { text: "  Q / E                 - Zoom in/out", type: "normal" },
-  { text: "  ESC                   - Deselect / Close", type: "normal" },
-  { text: "  Idle for 3s           - Camera micro-drift", type: "normal" },
-  { text: "", type: "normal" },
-  { text: "> PLANET INTERACTION", type: "header" },
-  { text: "  Click planet to inspect data", type: "normal" },
-  { text: "  Skills planet shows holographic panels!", type: "hint" },
-  { text: "  Photography planet has a gallery carousel", type: "hint" },
-  { text: "  Contact links are active hyperlinks", type: "hint" },
-  { text: "", type: "normal" },
-  { text: "> HIDDEN EASTER EGGS", type: "header" },
-  { text: "  [!] BLACK HOLE: Click to spaghettify text", type: "hint" },
-  { text: "  [!] BLACK HOLE: 3rd click reveals archive", type: "hint" },
-  { text: "  [!] ROGUE PLANET: Zoom far out to find it", type: "hint" },
-  { text: "  [!] TRIPLE-CLICK space for a secret msg", type: "hint" },
-  { text: "  [!] Stay idle 20s for meteor shower", type: "hint" },
-  { text: "  [!] Wait 70-120s for deep space signal", type: "hint" },
-  { text: "", type: "normal" },
-  { text: "> SMART SYSTEM AWARENESS", type: "header" },
-  { text: "  Scroll fast       - Velocity alert", type: "normal" },
-  { text: "  Visit all planets - Exploration complete", type: "normal" },
-  { text: "  Revisit 3x        - Interest detected", type: "normal" },
-  { text: "", type: "normal" },
-  { text: "> AUDIO SYSTEM", type: "header" },
-  { text: "  NASA-inspired spatial audio engine", type: "normal" },
-  { text: "  Unique synth SFX per interaction", type: "normal" },
-  { text: "  Toggle with SFX button (top-right)", type: "normal" },
-  { text: "", type: "normal" },
-  { text: "========================================", type: "separator" },
-  { text: "> STATUS: ALL SYSTEMS NOMINAL", type: "header" },
-  { text: "> EXPLORER, YOU ARE CLEARED FOR DEEP SPACE.", type: "hint" },
-]

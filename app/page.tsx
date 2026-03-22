@@ -39,6 +39,21 @@ function SpacePortfolioInner() {
     }
   }, [sounds])
 
+  // Auto-launch after 2-3 seconds
+  useEffect(() => {
+    if (phase !== "start") return
+    const launchDelay = 2500 + Math.random() * 500 // 2.5-3 second range
+    const timer = setTimeout(() => {
+      setPhase("launching")
+      sounds.play("warp")
+      setTimeout(() => {
+        setPhase("space")
+        setShowStart(false)
+      }, 2600)
+    }, launchDelay)
+    return () => clearTimeout(timer)
+  }, [phase, sounds])
+
   // Deep space signal easter egg: after 70-120s of exploration
   useEffect(() => {
     if (phase !== "space" || signalDismissed) return
@@ -102,6 +117,7 @@ function SpacePortfolioInner() {
   }, [phase, idleMeteorMsg, sounds])
 
   const handleLaunch = useCallback(() => {
+    // Manual override (if needed) - can skip to space immediately
     setPhase("launching")
     setTimeout(() => {
       setPhase("space")
